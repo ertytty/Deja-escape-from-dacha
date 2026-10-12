@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Дюха: Побег с дачи</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101821;color:#fff;font-family:system-ui,sans-serif;touch-action:none}canvas{display:block;width:100vw;height:100dvh;image-rendering:pixelated;background:#182c27}.hud{position:fixed;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}.pill{background:#101821dd;border:2px solid #53685a;border-radius:10px;padding:7px 10px;font-weight:800;text-shadow:2px 2px #000;font-size:13px}.hint{position:fixed;left:50%;top:62px;transform:translateX(-50%);background:#101821d9;border:1px solid #6e8a72;border-radius:9px;padding:8px 12px;text-align:center;font-size:12px;max-width:85vw}.controls{position:fixed;bottom:15px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:end;pointer-events:none}.pad{display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px 48px;gap:3px;pointer-events:auto}.key,.act{background:#19242bd9;border:2px solid #8da38a;border-radius:12px;color:white;font-size:20px;font-weight:900;touch-action:none}.key[data-d="up"]{grid-column:2;grid-row:1}.key[data-d="left"]{grid-column:1;grid-row:2}.key[data-d="down"]{grid-column:2;grid-row:2}.key[data-d="right"]{grid-column:3;grid-row:2}.act{width:68px;height:68px;border-radius:50%;font-size:12px;pointer-events:auto;background:#8e4b36dd}.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#09110fe8;padding:22px}.panel{max-width:440px;width:100%;background:#1a2928;border:3px solid #829879;border-radius:16px;padding:22px;text-align:center;box-shadow:0 10px 50px #000}.panel h1{font-size:26px;line-height:1.1;margin:0 0 12px;color:#e8c77b}.panel p{line-height:1.45;color:#d5e1d0}.start{border:0;border-radius:10px;background:#d9a44c;color:#241b0f;font-weight:900;font-size:18px;padding:13px 22px}
+@media(min-width:800px){.controls{opacity:.8}.hint{font-size:14px}}
+</style></head><body><canvas id="game"></canvas>
+<div class="hud"><div class="pill" id="health">♥ ♥ ♥</div><div class="pill" id="objective">ЗАДАЧА: доберись до сарая</div><div class="pill" id="score">0 м</div></div>
+<div class="hint" id="hint">Найди выход с участка. Ремень патрулирует двор!</div>
+<div class="controls"><div class="pad"><button class="key" data-d="up">▲</button><button class="key" data-d="left">◀</button><button class="key" data-d="down">▼</button><button class="key" data-d="right">▶</button></div><button class="act" id="dash">РЫВОК</button></div>
+<div class="overlay" id="intro"><div class="panel"><h1>ДЮХА: ПОБЕГ С ДАЧИ</h1><p>Ты заперт на даче дяди Васи. Найди путь через двор к старому сараю и не попадайся Ремню!</p><p><b>Управление:</b> стрелки / WASD, рывок — кнопка справа или пробел.</p><button class="start" id="start">НАЧАТЬ ПОБЕГ</button></div></div>
+<script>
+(()=>{const c=document.getElementById('game'),ctx=c.getContext('2d');let W=0,H=0,scale=2;function resize(){W=c.width=Math.floor(innerWidth/2);H=c.height=Math.floor(innerHeight/2)}addEventListener('resize',resize);resize();
+const world={w:1800,h:1300};const player={x:260,y:250,r:10,speed:2.15,hp:3,dx:0,dy:0,inv:0};const belt={x:860,y:660,r:13,phase:0};let keys={},started=false,won=false,dead=false,dash=0,steps=0,last=0;
+const trees=[];for(let y=80;y<1250;y+=125)for(let x=80;x<1750;x+=140){if((x>300&&x<720&&y>180&&y<490)||(x>800&&x<1160&&y>500&&y<790))continue;trees.push({x:x+(y%3)*14,y:y+((x%5)*7),r:12+(x%9)})}
+const house={x:180,y:120,w:380,h:260},shed={x:1300,y:730,w:210,h:150},pond={x:1040,y:100,w:290,h:180},garden={x:690,y:820,w:360,h:230};
+function rect(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(x,y,w,h)}
+function text(t,x,y,col='#fff'){ctx.fillStyle=col;ctx.font='bold 10px monospace';ctx.fillText(t,x,y)}
+function drawHouse(){rect(house.x,house.y,house.w,house.h,'#7a4935');rect(house.x+12,house.y+12,house.w-24,house.h-24,'#c38d59');rect(house.x+45,house.y+40,110,75,'#4a6b75');rect(house.x+225,house.y+40,110,75,'#4a6b75');rect(house.x+145,house.y+135,90,110,'#69432d');rect(house.x-18,house.y-22,house.w+36,28,'#a83d31');for(let i=0;i<9;i++)rect(house.x+i*43,house.y-22,21,28,'#bd5140');text('ДОМ ДЯДИ ВАСИ',house.x+130,house.y+12,'#fff0bd')}
+function draw(){ctx.imageSmoothingEnabled=false;rect(0,0,W,H,'#294d36');const camX=Math.max(0,Math.min(world.w-W,player.x-W/2)),camY=Math.max(0,Math.min(world.h-H,player.y-H/2));ctx.save();ctx.translate(-camX,-camY);
+rect(0,0,world.w,world.h,'#345e3e');
+// pixel grass flecks
+for(let i=0;i<500;i++){let x=(i*137)%world.w,y=(i*83)%world.h;rect(x,y,2,2,i%3?'#3b6842':'#2e5439')}
+rect(0,0,world.w,20,'#6c5739');rect(0,world.h-20,world.w,20,'#6c5739');rect(0,0,20,world.h,'#6c5739');rect(world.w-20,0,20,world.h,'#6c5739');
+rect(0,450,world.w,90,'#9a855c');rect(0,466,world.w,6,'#c4b184');rect(0,520,world.w,6,'#6c5d43');
+drawHouse();rect(pond.x,pond.y,pond.w,pond.h,'#407d9b');rect(pond.x+12,pond.y+10,pond.w-24,pond.h-20,'#5596b1');for(let i=0;i<12;i++)rect(pond.x+18+i*20,pond.y+25+(i%3)*32,20,3,'#8ac2c9');
+rect(garden.x,garden.y,garden.w,garden.h,'#76563c');for(let i=0;i<5;i++){rect(garden.x+10,garden.y+12+i*40,garden.w-20,22,'#4e773d');for(let j=0;j<12;j++)rect(garden.x+20+j*26,garden.y+16+i*40,10,13,(j+i)%2?'#b8c75a':'#d86b45')}
+rect(shed.x,shed.y,shed.w,shed.h,'#8a6843');rect(shed.x+12,shed.y+12,shed.w-24,shed.h-24,'#b38b54');rect(shed.x+65,shed.y+70,80,80,'#503c2b');rect(shed.x+75,shed.y+80,60,70,'#6e4a30');text('СТАРЫЙ САРАЙ',shed.x+42,shed.y-8,'#fff0bd');
+trees.forEach(t=>{rect(t.x-t.r/2,t.y, t.r, t.r,'#62472e');rect(t.x-t.r,t.y-t.r,t.r*2,t.r*1.5,'#234b30');rect(t.x-t.r+4,t.y-t.r+4,t.r*1.1,t.r*.7,'#3b7040')});
+ // belt monster
+ belt.phase+=.035;const bx=belt.x+Math.sin(belt.phase)*75,by=belt.y+Math.cos(belt.phase*.7)*45;ctx.fillStyle='#181c20';ctx.fillRect(bx-15,by-8,30,16);ctx.fillStyle='#b3a16d';ctx.fillRect(bx-7,by-5,14,10);ctx.fillStyle='#d4c28b';ctx.fillRect(bx-3,by-2,6,4);text('РЕМЕНЬ',bx-19,by-15,'#ffd9a0');
+ // player pixel sprite
+ rect(player.x-7,player.y-9,14,17,'#252a34');rect(player.x-6,player.y-14,12,10,'#dca77d');rect(player.x-7,player.y-16,14,5,'#493329');rect(player.x-5,player.y-3,4,4,'#e8d27c');rect(player.x+2,player.y-3,4,4,'#e8d27c');rect(player.x-6,player.y+7,4,6,'#171b21');rect(player.x+3,player.y+7,4,6,'#171b21');
+ // exit marker
+ rect(1660,1130,74,50,'#d6b65b');rect(1668,1138,58,34,'#354b35');text('ВЫХОД',1672,1124,'#fff1a6');
+ // camera soft edge vignette
+ ctx.restore();document.getElementById('score').textContent=Math.round(Math.hypot(player.x-260,player.y-250))+' м';
+ document.getElementById('health').textContent='♥ '.repeat(player.hp).trim()||'☠';if(player.hp<=0&&!dead){dead=true;showEnd('ПОПАЛСЯ!','Ремень поймал Дюху. Попробуй ещё раз.','ЗАНОВО')}
+ if(player.x>1650&&player.y>1100&&!won){won=true;showEnd('ТЫ СБЕЖАЛ!','Дюха выбрался с дачи. Но дядя Вася уже звонит…','ЕЩЁ РАЗ')}
+}
+function showEnd(title,msg,btn){let ov=document.createElement('div');ov.className='overlay';ov.innerHTML='<div class="panel"><h1>'+title+'</h1><p>'+msg+'</p><button class="start">'+btn+'</button></div>';ov.querySelector('button').onclick=()=>location.reload();document.body.appendChild(ov)}
+function move(dt){if(!started||won||dead)return;let x=(keys.right?1:0)-(keys.left?1:0),y=(keys.down?1:0)-(keys.up?1:0);let l=Math.hypot(x,y)||1;x/=l;y/=l;let sp=player.speed*(dash>0?2.6:1);if(dash>0)dash-=dt;let nx=player.x+x*sp*dt,ny=player.y+y*sp*dt;
+ // collision boundaries, pond and buildings (except house door gap)
+ if(nx>25&&nx<world.w-25)player.x=nx;if(ny>25&&ny<world.h-25)player.y=ny;
+ if(player.x>house.x-15&&player.x<house.x+house.w+15&&player.y>house.y-15&&player.y<house.y+house.h+15){if(!(player.x>house.x+145&&player.x<house.x+235&&player.y>house.y+220)){player.x-=x*sp*dt;player.y-=y*sp*dt}}
+ if(player.x>pond.x-10&&player.x<pond.x+pond.w+10&&player.y>pond.y-10&&player.y<pond.y+pond.h+10){player.x-=x*sp*dt;player.y-=y*sp*dt}
+ const bx=belt.x+Math.sin(belt.phase)*75,by=belt.y+Math.cos(belt.phase*.7)*45;if(Math.hypot(player.x-bx,player.y-by)<24&&player.inv<=0){player.hp--;player.inv=1100;document.getElementById('hint').textContent='Ремень ударил! Убегай и держись подальше.'}
+ if(player.inv>0)player.inv-=dt;
+ document.getElementById('objective').textContent=player.x>1250&&player.y>680?'ЗАДАЧА: найди выход внизу справа':'ЗАДАЧА: доберись до сарая';
+}
+let prev=performance.now();function loop(now){let dt=Math.min(2,(now-prev)/16.67);prev=now;move(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+addEventListener('keydown',e=>{let k=e.key.toLowerCase();if(['arrowup','w'].includes(k))keys.up=true;if(['arrowdown','s'].includes(k))keys.down=true;if(['arrowleft','a'].includes(k))keys.left=true;if(['arrowright','d'].includes(k))keys.right=true;if(k===' '){dash=260;e.preventDefault()}});
+addEventListener('keyup',e=>{let k=e.key.toLowerCase();if(['arrowup','w'].includes(k))keys.up=false;if(['arrowdown','s'].includes(k))keys.down=false;if(['arrowleft','a'].includes(k))keys.left=false;if(['arrowright','d'].includes(k))keys.right=false});
+document.querySelectorAll('.key').forEach(b=>{const d=b.dataset.d;const on=e=>{e.preventDefault();keys[d]=true};const off=e=>{e.preventDefault();keys[d]=false};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off)});
+document.getElementById('dash').addEventListener('pointerdown',e=>{e.preventDefault();dash=260});document.getElementById('start').onclick=()=>{started=true;document.getElementById('intro').remove();document.getElementById('hint').textContent='Иди к сараю, затем к выходу в правом нижнем углу.'};
+})();
+</script></body></html>
